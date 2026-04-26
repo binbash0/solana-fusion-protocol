@@ -84,6 +84,41 @@ describe("Fusion Swap", () => {
       ]);
     });
 
+    it("cannot fill order when protocol_fee + integrator_fee > 100%", async () => {
+  const orderConfig = state.orderConfig({
+    fee: {
+      protocolFee: 60000,   // 60%
+      integratorFee: 60000, // 60% → total 120%
+      surplusPercentage: 0,
+      maxCancellationPremium: new anchor.BN(0),
+      protocolDstAcc: state.charlie.atas[state.tokens[1].toString()].address,
+      integratorDstAcc: state.dave.atas[state.tokens[1].toString()].address,
+    },
+  });
+
+  const escrow = await state.createEscrow({
+    escrowProgram: program,
+    payer,
+    provider,
+    orderConfig,
+  });
+
+  await expect(
+    program.methods
+      .fill(escrow.orderConfig, state.defaultSrcAmount)
+      .accountsPartial(
+        state.buildAccountsDataForFill({
+          escrow: escrow.escrow,
+          escrowSrcAta: escrow.ata,
+          protocolDstAcc: state.charlie.atas[state.tokens[1].toString()].address,
+          integratorDstAcc: state.dave.atas[state.tokens[1].toString()].address,
+        })
+      )
+      .signers([state.bob.keypair])
+      .rpc()
+  ).to.be.rejectedWith("ProgramError::ArithmeticOverflow");
+});
+
     it("Execute the trade with different maker's receiver", async () => {
       const escrow = await state.createEscrow({
         escrowProgram: program,
